@@ -39,7 +39,7 @@ document.getElementById("loginForm").addEventListener("submit", async function(e
   const emailOrMobile = document.getElementById("emailOrMobile").value;
   const password = document.getElementById("password").value;
   try {
-    const response = await fetch('users/login?emailOrMobile=${encodeURIComponent(emailOrMobile)}&password=${encodeURIComponent(password)}', {
+    const response = await fetch(`/users/login?emailOrMobile=${encodeURIComponent(emailOrMobile)}&password=${encodeURIComponent(password)}`, {
       method: "POST"
     });
 
