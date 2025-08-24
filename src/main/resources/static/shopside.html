@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Provider Dashboard - Shop Management</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="dashboard.html"> 
+      <img src="images/logo.png" alt="MyApp Logo" width="40" height="40" class="me-2">
+      Ela</a>
+    <div class="d-flex text-white ms-auto">
+      <button class="btn btn-outline-light" href="#" class="text-white me-3" id="userNameLink"></button>
+
+      <button class="btn btn-outline-light" onclick="logout()">Logout</button>
+    </div>
+  </div>
+</nav>
+
+<div class="container mt-4">
+  <div class="card mb-4">
+    <div class="card-header">
+      <h5>Shop Info</h5>
+    </div>
+    <div class="card-body">
+      <div class="mb-3">
+        <label class="form-label">Shop Name</label>
+        <input type="text" class="form-control" id="shopName">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Location</label>
+        <input type="text" class="form-control" id="shopLocation">
+      </div>
+      <button class="btn btn-primary" onclick="updateShop()">Update Shop</button>
+    </div>
+  </div>
+  <div class="card mb-4">
+    <div class="card-header">
+      <h5>Shop Images</h5>
+    </div>
+    <div class="card-body">
+      <input type="file" id="imageUpload" class="form-control mb-3">
+      <button class="btn btn-success mb-3" onclick="uploadImage()">Upload Image</button>
+      <div class="d-flex flex-wrap gap-2" id="shopImages">
+      </div>
+    </div>
+  </div>
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5>Services</h5>
+      <button class="btn btn-success btn-sm" onclick="openServiceModal()">Add Service</button>
+    </div>
+    <div class="card-body">
+      <ul class="list-group" id="servicesList">
+      </ul>
+    </div>
+  </div>
+  <div class="card mb-4">
+    <div class="card-header">
+      <h5>Appointments</h5>
+    </div>
+    <div class="card-body">
+      <ul class="list-group" id="appointmentsList">
+      </ul>
+    </div>
+  </div>
+
+</div>
+<div class="modal fade" id="serviceModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="serviceModalTitle">Add Service</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="serviceId">
+        <div class="mb-3">
+          <label class="form-label">Title</label>
+          <input type="text" class="form-control" id="serviceTitle">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea class="form-control" id="serviceDescription"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Price</label>
+          <input type="number" class="form-control" id="servicePrice">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Duration</label>
+          <input type="text" class="form-control" id="serviceDuration">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Date</label>
+          <input type="date" class="form-control" id="serviceDate">
+        </div>
+        <button class="btn btn-primary" onclick="saveService()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const providerId = 1; 
+let currentShop = null;
+function loadShop() {
+  fetch(`/api/shops/provider/${providerId}`)
+    .then(res => res.json())
+    .then(shop => {
+      currentShop = shop;
+      document.getElementById('shopName').value = shop.name;
+      document.getElementById('shopLocation').value = shop.location;
+      loadShopImages(shop.images || []);
+      loadServices(shop.id);
+      loadAppointments(shop.id);
+    }).catch(err => console.error(err));
+}
+function updateShop() {
+  const updatedShop = {
+    id: currentShop.id,  
+    name: document.getElementById('shopName').value.trim(),
+    location: document.getElementById('shopLocation').value.trim(),
+    provider: { id: providerId }, 
+    images: currentShop.images  
+  };
+  fetch(`/api/shops/${currentShop.id}?providerId=${providerId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updatedShop)
+  })
+    .then(res => {
+      if (!res.ok) throw new Error("Update failed");
+      return res.json();
+    })
+    .then(data => {
+      alert('Shop updated successfully');
+      currentShop = data; 
+      document.getElementById('shopName').value = data.name;
+      document.getElementById('shopLocation').value = data.location;
+    })
+    .catch(err => console.error("Update error:", err));
+}
+function loadShopImages(images) {
+  const div = document.getElementById('shopImages');
+  div.innerHTML = '';
+  images.forEach(img => {
+    const fileName = img.split('/').pop(); 
+    const imgEl = document.createElement('div');
+    imgEl.className = 'position-relative d-inline-block';
+    imgEl.innerHTML = `
+      <img src="/uploads/${fileName}" width="100" height="100" class="me-2 mb-2 rounded shadow">
+      <button class="btn btn-sm btn-danger position-absolute top-0 end-0" onclick="deleteImage('${fileName}')">X</button>
+    `;
+    div.appendChild(imgEl);
+  });
+}
+function uploadImage() {
+  const fileInput = document.getElementById('imageUpload');
+  if (!fileInput.files.length) return alert('Select an image first');
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+  fetch(`/api/shops/${currentShop.id}/upload-image?providerId=${providerId}`, {
+    method: 'POST',
+    body: formData
+  }).then(res => res.json())
+    .then(data => {
+      alert('Image uploaded');
+      currentShop.images.push(data.url.replace('/uploads/',''));
+      loadShopImages(currentShop.images);
+    }).catch(err => console.error(err));
+}
+function deleteImage(imageName) {
+  const fileName = imageName.split('/').pop();
+
+  fetch(`/api/shops/${currentShop.id}/delete-image?providerId=${providerId}&imageName=${fileName}`, {
+    method: 'DELETE'
+  })
+  .then(res => {
+    if (!res.ok) throw new Error("Failed to delete image");
+    return res.text(); 
+  })
+  .then(() => {
+    alert("Image deleted successfully");
+    currentShop.images = currentShop.images.filter(img => img.split('/').pop() !== fileName);
+
+    loadShopImages(currentShop.images);
+  })
+  .catch(err => console.error("Delete failed:", err));
+}
+function loadServices(shopId) {
+  fetch(`/api/services/shop/${shopId}`)
+    .then(res => res.json())
+    .then(services => {
+      const list = document.getElementById('servicesList');
+      list.innerHTML = '';
+      services.forEach(s => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.innerHTML = `
+          <span>${s.title} - $${s.price}</span>
+          <div>
+            <button class="btn btn-sm btn-warning me-2" onclick="editService(${s.id})">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteService(${s.id})">Delete</button>
+          </div>
+        `;
+        list.appendChild(li);
+      });
+    });
+}
+function openServiceModal() {
+  document.getElementById('serviceModalTitle').textContent = 'Add Service';
+  document.getElementById('serviceId').value = '';
+  document.getElementById('serviceTitle').value = '';
+  document.getElementById('serviceDescription').value = '';
+  document.getElementById('servicePrice').value = '';
+  document.getElementById('serviceDuration').value = '';
+  document.getElementById('serviceDate').value = '';
+  new bootstrap.Modal(document.getElementById('serviceModal')).show();
+}
+function saveService() {
+  const serviceId = document.getElementById('serviceId').value;
+  const payload = {
+    title: document.getElementById('serviceTitle').value,
+    description: document.getElementById('serviceDescription').value,
+    price: parseFloat(document.getElementById('servicePrice').value),
+    duration: document.getElementById('serviceDuration').value,
+    date: document.getElementById('serviceDate').value,
+    shop: { id: currentShop.id }
+  };
+  const url = serviceId ? 
+    `/api/services/update/${serviceId}?providerId=${providerId}` :
+    `/api/services/add`;
+  const method = serviceId ? 'PUT' : 'POST';
+
+  fetch(url, {method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+    .then(res => res.json())
+    .then(data => {
+      alert('Service saved');
+      loadServices(currentShop.id);
+      bootstrap.Modal.getInstance(document.getElementById('serviceModal')).hide();
+    }).catch(err => console.error(err));
+}
+function editService(serviceId) {
+  fetch(`/api/services/shop/${currentShop.id}`)
+    .then(res => res.json())
+    .then(services => {
+      const s = services.find(x => x.id===serviceId);
+      document.getElementById('serviceModalTitle').textContent = 'Edit Service';
+      document.getElementById('serviceId').value = s.id;
+      document.getElementById('serviceTitle').value = s.title;
+      document.getElementById('serviceDescription').value = s.description;
+      document.getElementById('servicePrice').value = s.price;
+      document.getElementById('serviceDuration').value = s.duration;
+      document.getElementById('serviceDate').value = s.date;
+      new bootstrap.Modal(document.getElementById('serviceModal')).show();
+    });
+}
+function deleteService(serviceId) {
+  if (!confirm('Delete this service?')) return;
+  fetch(`/api/services/delete/${serviceId}?providerId=${providerId}`, {method:'DELETE'})
+    .then(res => res.json())
+    .then(data => {
+      alert(data);
+      loadServices(currentShop.id);
+    });
+}
+function loadAppointments(shopId) {
+  fetch(`/api/appointments/shop/${shopId}`)
+    .then(res => res.json())
+    .then(appts => {
+      appts.sort((a, b) => new Date(b.appointmentDateTime) - new Date(a.appointmentDateTime));
+
+      const list = document.getElementById('appointmentsList');
+      list.innerHTML = '';
+      appts.forEach(a => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.innerHTML = `
+          <div>
+            <strong><a href="#" onclick="showUserBookings(${a.user.id})">${a.user.name}</a></strong>  
+            - ${new Date(a.appointmentDateTime).toLocaleString()} <br>
+            Service: ${a.service.title} | Status: ${a.status}
+          </div>
+          <div>
+            ${a.status==='PENDING' ? `
+              <button class="btn btn-sm btn-success me-1" onclick="updateAppointment(${a.id}, 'accept')">Accept</button>
+              <button class="btn btn-sm btn-danger" onclick="updateAppointment(${a.id}, 'reject')">Reject</button>
+            ` : ''}
+            ${a.status==='CONFIRMED' ? `
+              <button class="btn btn-sm btn-primary" onclick="updateAppointment(${a.id}, 'complete')">Complete</button>
+            ` : ''}
+          </div>
+        `;
+        list.appendChild(li);
+      });
+    });
+}
+function updateAppointment(appointmentId, action) {
+  fetch(`/api/appointments/${appointmentId}/${action}?providerId=${providerId}`, {method:'PUT'})
+    .then(res => res.json())
+    .then(data => {
+      alert(`Appointment ${action}ed`);
+      loadAppointments(currentShop.id);
+    });
+}
+document.addEventListener("DOMContentLoaded", () => {
+  const user = JSON.parse(localStorage.getItem("user"));
+  if (user) {
+    const userNameLink = document.getElementById("userNameLink");
+    userNameLink.textContent = user.name; 
+    userNameLink.addEventListener("click", () => {
+      if(user.role === "USER") {
+        window.location.href = "profile.html"; 
+      } else if(user.role === "PROVIDER") {
+        window.location.href = "shopside-appointments.html"; 
+      }
+    });
+  }
+});
+function logout() {
+  localStorage.removeItem("user");
+  window.location.href = "login.html"; 
+}
+loadShop();
+</script>
+
+</body>
+</html>

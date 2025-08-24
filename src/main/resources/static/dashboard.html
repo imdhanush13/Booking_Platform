@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="dashboard.html">
+      <img src="images/logo.png" alt="MyApp Logo" width="50" height="40" class="me-2">
+      Ela</a>
+    <div class="d-flex text-white ms-auto">
+      <button class="btn btn-outline-light" href="#" id="userNameLink"></button>
+
+      <button class="btn btn-outline-light" onclick="logout()">Logout</button>
+    </div>
+  </div>
+</nav>
+<div class="container mt-4">
+  <div class="mb-4">
+    <input type="text" class="form-control" id="searchInput" placeholder="Search shops..." oninput="searchShops()">
+  </div>
+  <div class="row" id="shopsGrid">
+  </div>
+</div>
+<div class="modal fade" id="shopModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="shopModalTitle">Shop Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="shopLocationDetail"></p>
+        <div id="shopImagesDetail" class="d-flex flex-wrap gap-2 mb-3"></div>
+        <h6>Services</h6>
+        <ul class="list-group" id="servicesListDetail"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="bookingModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Book Service</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="bookingServiceId">
+        <div class="mb-3">
+          <label class="form-label">Select Date & Time</label>
+          <input type="datetime-local" class="form-control" id="bookingDateTime">
+        </div>
+        <button class="btn btn-primary" onclick="bookService()">Book</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const userId = 1;
+let shops = [];
+let selectedShop = null;
+let selectedService = null;
+function loadShops() {
+  fetch('/api/shops')
+    .then(res => res.json())
+    .then(data => {
+      shops = data;
+      renderShops(shops);
+    });
+}
+function renderShops(shopsToRender) {
+  const grid = document.getElementById('shopsGrid');
+  grid.innerHTML = '';
+  shopsToRender.forEach(shop => {
+     const imageUrl = (shop.images && shop.images.length)
+      ? `/uploads/${shop.images[0]}`
+      : "assets/default-shop.png"; 
+
+    const col = document.createElement('div');
+        col.className = 'col-md-4 mb-3';
+        col.innerHTML = `
+        <div class="card" onclick="openShopModal(${shop.id})" style="cursor:pointer;">
+            <img src="${imageUrl}" class="card-img-top" height="200" style="object-fit:cover;">
+            <div class="card-body">
+            <h5 class="card-title">${shop.name || "Unnamed Shop"}</h5>
+            <p class="card-text">${shop.location || "No location provided"}</p>
+            </div>
+        </div>
+    `;
+    grid.appendChild(col);
+  });
+}
+function searchShops() {
+  const query = document.getElementById('searchInput').value.toLowerCase();
+  const filtered = shops.filter(s => s.name.toLowerCase().includes(query) || (s.location || '').toLowerCase().includes(query));
+  renderShops(filtered);
+}
+function openShopModal(shopId) {
+  selectedShop = shops.find(s => s.id === shopId);
+  document.getElementById('shopModalTitle').textContent = selectedShop.name;
+  document.getElementById('shopLocationDetail').textContent = `Location: ${selectedShop.location || ''}`;
+  const imagesDiv = document.getElementById('shopImagesDetail');
+  imagesDiv.innerHTML = '';
+  (selectedShop.images || []).forEach(img => {
+    const imgEl = document.createElement('img');
+    imgEl.src = `/uploads/${img}`;
+    imgEl.width = 100;
+    imgEl.height = 100;
+    imagesDiv.appendChild(imgEl);
+  });
+  fetch(`/api/services/shop/${selectedShop.id}`)
+    .then(res => res.json())
+    .then(services => {
+      const list = document.getElementById('servicesListDetail');
+      list.innerHTML = '';
+      services.forEach(s => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.innerHTML = `
+          <span>${s.title} - $${s.price}</span>
+          <button class="btn btn-sm btn-primary" onclick="openBookingModal(${s.id})">Book</button>
+        `;
+        list.appendChild(li);
+      });
+    });
+
+  new bootstrap.Modal(document.getElementById('shopModal')).show();
+}
+function openBookingModal(serviceId) {
+  selectedService = serviceId;
+  document.getElementById('bookingServiceId').value = serviceId;
+  new bootstrap.Modal(document.getElementById('bookingModal')).show();
+}
+function bookService() {
+  const datetime = document.getElementById('bookingDateTime').value;
+  if(!datetime) return alert('Select date and time');
+  const payload = {
+    user: { id: userId },
+    service: { id: selectedService },
+    appointmentDateTime: datetime
+  };
+  fetch('/api/appointments/book', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  }).then(res => res.json())
+    .then(data => {
+      alert('Appointment booked!');
+      bootstrap.Modal.getInstance(document.getElementById('bookingModal')).hide();
+    });
+}
+document.addEventListener("DOMContentLoaded", () => {
+  const user = JSON.parse(localStorage.getItem("user"));
+  if (user) {
+    const userNameLink = document.getElementById("userNameLink");
+    userNameLink.textContent = user.name; 
+    userNameLink.addEventListener("click", () => {
+      if(user.role === "USER") {
+        window.location.href = "profile.html"; 
+      } else if(user.role === "PROVIDER") {
+        window.location.href = "shopside-appointments.html"; 
+      }
+    });
+  }
+});
+
+function loadAppointments(shopId) {
+  fetch(`/api/appointments/shop/${shopId}`)
+    .then(res => res.json())
+    .then(appts => {
+      const list = document.getElementById('appointmentsList');
+      list.innerHTML = '';
+
+      appts.sort((a, b) => new Date(b.appointmentDateTime) - new Date(a.appointmentDateTime));
+
+      appts.forEach(a => {
+        const userLink = document.getElementById('userNameLink');
+        if (userLink && !userLink.dataset.set) {
+          userLink.textContent = a.user.name;
+          userLink.href = `user-booking-history.html?userId=${a.user.id}`;
+          userLink.dataset.set = true; 
+        }
+
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.innerHTML = `
+          <div>
+            <strong>
+              <a href="user-booking-history.html?userId=${a.user.id}" class="text-decoration-none">
+                ${a.user.name}
+              </a>
+            </strong> - ${new Date(a.appointmentDateTime).toLocaleString()} <br>
+            Service: ${a.service.title} | Status: ${a.status}
+          </div>
+          <div>
+            ${a.status==='PENDING' ? `<button class="btn btn-sm btn-success me-1" onclick="updateAppointment(${a.id}, 'accept')">Accept</button>
+            <button class="btn btn-sm btn-danger" onclick="updateAppointment(${a.id}, 'reject')">Reject</button>` : ''}
+            ${a.status==='CONFIRMED' ? `<button class="btn btn-sm btn-primary" onclick="updateAppointment(${a.id}, 'complete')">Complete</button>` : ''}
+          </div>
+        `;
+        list.appendChild(li);
+      });
+    });
+}
+function logout() {
+  localStorage.removeItem("user");
+  window.location.href = "login.html";
+}
+loadShops();
+</script>
+</body>
+</html>
