@@ -1,14 +1,13 @@
-# Step 1: Use an official OpenJDK runtime as base
-FROM openjdk:17-jdk-slim
-
-# Step 2: Set working directory inside container
+# Step 1: Build the application
+FROM maven:3.9.6-eclipse-temurin-17 AS builder
 WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+RUN mvn clean package -DskipTests
 
-# Step 3: Copy built JAR file from target/ to container
-COPY target/*.jar app.jar
-
-# Step 4: Expose port (Spring Boot default is 8080)
+# Step 2: Run the application
+FROM eclipse-temurin:17-jdk
+WORKDIR /app
+COPY --from=builder /app/target/*.jar app.jar
 EXPOSE 8080
-
-# Step 5: Run the jar file
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java","-jar","app.jar"]
